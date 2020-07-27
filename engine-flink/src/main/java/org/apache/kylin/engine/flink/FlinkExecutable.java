@@ -211,6 +211,10 @@ public class FlinkExecutable extends AbstractExecutable {
                     }
                 }
             }
+
+            //set job name
+            sb.append(" -ynm ").append(this.getName().replaceAll(" ", "-")).append(" ");
+
             if (StringUtils.isNotBlank(jars)) {
                 String[] splitJars = jars.split(",\\s*");
                 Set<String> setJars = new HashSet();
@@ -336,7 +340,7 @@ public class FlinkExecutable extends AbstractExecutable {
                 return new ExecuteResult(ExecuteResult.State.STOPPED, appId + " is stopped");
             }
         } catch (Exception e) {
-            logger.error("error run spark job:", e);
+            logger.error("error run flink job:", e);
             return new ExecuteResult(ExecuteResult.State.ERROR, e.getLocalizedMessage());
         }
     }
