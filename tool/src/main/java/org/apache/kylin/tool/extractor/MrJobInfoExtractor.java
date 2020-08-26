@@ -40,9 +40,9 @@ import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import org.apache.kylin.shaded.com.google.common.base.Preconditions;
+import org.apache.kylin.shaded.com.google.common.collect.Maps;
+import org.apache.kylin.shaded.com.google.common.collect.Sets;
 
 /**
  * http://hadoop.apache.org/docs/r2.7.3/hadoop-mapreduce-client/hadoop-mapreduce-client-hs/HistoryServerRest.html
@@ -83,21 +83,22 @@ public class MrJobInfoExtractor extends AbstractInfoExtractor {
     }
 
     private String getHttpResponse(String url) {
-        DefaultHttpClient client = new DefaultHttpClient();
         String msg = null;
-        int retryTimes = 0;
-        while (msg == null && retryTimes < HTTP_RETRY) {
-            retryTimes++;
+        try (DefaultHttpClient client = new DefaultHttpClient()) {
+            int retryTimes = 0;
+            while (msg == null && retryTimes < HTTP_RETRY) {
+                retryTimes++;
 
-            HttpGet request = new HttpGet(url);
-            try {
-                request.addHeader("accept", "application/json");
-                HttpResponse response = client.execute(request);
-                msg = EntityUtils.toString(response.getEntity());
-            } catch (Exception e) {
-                logger.warn("Failed to fetch http response. Retry={}", retryTimes, e);
-            } finally {
-                request.releaseConnection();
+                HttpGet request = new HttpGet(url);
+                try {
+                    request.addHeader("accept", "application/json");
+                    HttpResponse response = client.execute(request);
+                    msg = EntityUtils.toString(response.getEntity());
+                } catch (Exception e) {
+                    logger.warn("Failed to fetch http response. Retry={}", retryTimes, e);
+                } finally {
+                    request.releaseConnection();
+                }
             }
         }
         return msg;

@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.TimeZone;
 import java.util.regex.Matcher;
 
-import com.google.common.collect.Lists;
+import org.apache.kylin.shaded.com.google.common.collect.Lists;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.kylin.common.KylinConfig;
@@ -56,9 +56,9 @@ import org.apache.kylin.metadata.project.ProjectManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
-import com.google.common.collect.Maps;
+import org.apache.kylin.shaded.com.google.common.base.Preconditions;
+import org.apache.kylin.shaded.com.google.common.base.Strings;
+import org.apache.kylin.shaded.com.google.common.collect.Maps;
 
 /**
  */
@@ -110,7 +110,6 @@ public class CubingJob extends DefaultChainedExecutable {
     public static final String CUBE_SIZE_BYTES = "byteSizeBytes";
     public static final String MAP_REDUCE_WAIT_TIME = "mapReduceWaitTime";
     private static final String DEPLOY_ENV_NAME = "envName";
-    private static final String PROJECT_INSTANCE_NAME = "projectName";
     private static final String JOB_TYPE = "jobType";
     private static final String SEGMENT_NAME = "segmentName";
 
@@ -184,14 +183,6 @@ public class CubingJob extends DefaultChainedExecutable {
         return getParam(DEPLOY_ENV_NAME);
     }
 
-    protected void setProjectName(String name) {
-        setParam(PROJECT_INSTANCE_NAME, name);
-    }
-
-    public String getProjectName() {
-        return getParam(PROJECT_INSTANCE_NAME);
-    }
-
     public String getJobType() {
         return getParam(JOB_TYPE);
     }
@@ -211,12 +202,12 @@ public class CubingJob extends DefaultChainedExecutable {
         final Output output = getManager().getOutput(getId());
         if (state != ExecutableState.ERROR
                 && !cubeInstance.getDescriptor().getStatusNeedNotify().contains(state.toString())) {
-            logger.info("state:" + state + " no need to notify users");
+            logger.info("state:{} no need to notify users", state);
             return null;
         }
 
         if (!MailNotificationUtil.hasMailNotification(state)) {
-            logger.info("Cannot find email template for job state: " + state);
+            logger.info("Cannot find email template for job state: {}", state);
             return null;
         }
 
@@ -289,6 +280,7 @@ public class CubingJob extends DefaultChainedExecutable {
         super.onExecuteFinished(result, executableContext);
     }
 
+    @Override
     protected void onStatusChange(ExecutableContext context, ExecuteResult result, ExecutableState state) {
         super.onStatusChange(context, result, state);
 
@@ -415,9 +407,9 @@ public class CubingJob extends DefaultChainedExecutable {
         try {
             String levelPath = JobBuilderSupport.getCuboidOutputPathsByLevel(rootPath, level);
             FileSystem fs = HadoopUtil.getFileSystem(levelPath);
-            return fs.getContentSummary(new Path(levelPath)).getLength() / (1024L * 1024L);
+            return fs.getContentSummary(new Path(levelPath)).getLength() / (1024.0 * 1024.0);
         } catch (Exception e) {
-            logger.warn("get level real size failed." + e);
+            logger.warn("get level real size failed.", e);
             return 0L;
         }
     }

@@ -28,7 +28,7 @@ import org.apache.kylin.job.constant.ExecutableConstants;
 import org.apache.kylin.metadata.model.IEngineAware;
 import org.slf4j.Logger;
 
-import com.google.common.collect.Maps;
+import org.apache.kylin.shaded.com.google.common.collect.Maps;
 
 /**
  * A logger which parses certain patterns from log
@@ -53,7 +53,7 @@ public class PatternedLogger extends BufferedLogger {
 
     // spark
     private static final Pattern PATTERN_SPARK_APP_ID = Pattern.compile("Submitted application (.*)");
-    private static final Pattern PATTERN_SPARK_APP_URL = Pattern.compile("tracking URL: (.*)");
+    private static final Pattern PATTERN_SPARK_APP_URL = Pattern.compile("(?i)Tracking URL: (.*)");
     private static final Pattern PATTERN_JOB_STATE = Pattern.compile("Final-State : (.*?)$");
 
     //flink

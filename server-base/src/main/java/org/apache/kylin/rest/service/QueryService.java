@@ -24,6 +24,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
@@ -55,6 +56,8 @@ import org.apache.calcite.prepare.CalcitePrepareImpl;
 import org.apache.calcite.prepare.OnlyPrepareEarlyAbortException;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.sql.type.BasicSqlType;
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.pool2.BaseKeyedPooledObjectFactory;
@@ -116,6 +119,8 @@ import org.apache.kylin.rest.util.AclPermissionUtil;
 import org.apache.kylin.rest.util.QueryRequestLimits;
 import org.apache.kylin.rest.util.SQLResponseSignatureUtil;
 import org.apache.kylin.rest.util.TableauInterceptor;
+import org.apache.kylin.shaded.com.google.common.hash.Hasher;
+import org.apache.kylin.shaded.com.google.common.hash.Hashing;
 import org.apache.kylin.storage.hybrid.HybridInstance;
 import org.apache.kylin.storage.hybrid.HybridManager;
 import org.apache.kylin.storage.stream.StreamStorageQuery;
@@ -130,9 +135,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
-import com.google.common.collect.Lists;
+import org.apache.kylin.shaded.com.google.common.base.Preconditions;
+import org.apache.kylin.shaded.com.google.common.base.Strings;
+import org.apache.kylin.shaded.com.google.common.collect.Lists;
 
 /**
  * @author xduo
@@ -325,9 +330,27 @@ public class QueryService extends BasicService {
             }
         }
 
+        // if Realization Names is empty, get value from SQLResponse.
         if (realizationNames.isEmpty()) {
             if (!Strings.isNullOrEmpty(response.getCube())) {
                 realizationNames.addAll(Lists.newArrayList(StringUtil.splitByComma(response.getCube())));
+            }
+        }
+
+        // if Cuboid Ids is empty, get value from SQLResponse.
+        if (cuboidIds.isEmpty()) {
+            List<QueryContext.CubeSegmentStatisticsResult> cubeSegmentStatisticsList =
+                    response.getCubeSegmentStatisticsList();
+            if (CollectionUtils.isNotEmpty(cubeSegmentStatisticsList)) {
+                cubeSegmentStatisticsList.forEach(cubeSegmentStatResult -> {
+                    if (MapUtils.isNotEmpty(cubeSegmentStatResult.getCubeSegmentStatisticsMap())) {
+                        cubeSegmentStatResult.getCubeSegmentStatisticsMap().values().forEach(cubeSegmentStatMap -> {
+                            cubeSegmentStatMap.values().forEach(cubeSegmentStat -> {
+                                cuboidIds.add(cubeSegmentStat.getTargetCuboidId());
+                            });
+                        });
+                    }
+                });
             }
         }
 
@@ -380,7 +403,11 @@ public class QueryService extends BasicService {
 
     public SQLResponse doQueryWithCache(SQLRequest sqlRequest, boolean isQueryInspect) {
         Message msg = MsgPicker.getMsg();
-        sqlRequest.setUsername(getUserName());
+
+        Hasher hasher = Hashing.murmur3_32().newHasher();
+        hasher.putString(getUserName(), StandardCharsets.UTF_8);
+        // use hash of the username to avoid sql injection
+        sqlRequest.setUsername(hasher.hash().toString());
 
         KylinConfig kylinConfig = KylinConfig.getInstanceFromEnv();
         String serverMode = kylinConfig.getServerMode();
@@ -411,6 +438,9 @@ public class QueryService extends BasicService {
         queryContext.setProject(sqlRequest.getProject());
 
         try (SetThreadName ignored = new SetThreadName("Query %s", queryContext.getQueryId())) {
+            // force clear the query context before a new query
+            OLAPContext.clearThreadLocalContexts();
+
             SQLResponse sqlResponse = null;
             String sql = sqlRequest.getSql();
             String project = sqlRequest.getProject();
@@ -469,11 +499,11 @@ public class QueryService extends BasicService {
         Message msg = MsgPicker.getMsg();
         final QueryContext queryContext = QueryContextFacade.current();
 
-        boolean isDummpyResponseEnabled = queryCacheEnabled && kylinConfig.isLazyQueryEnabled();
+        boolean isDummyResponseEnabled = queryCacheEnabled && kylinConfig.isLazyQueryEnabled();
         SQLResponse sqlResponse = null;
         try {
             // Add dummy response which will be updated or evicted when query finishes
-            if (isDummpyResponseEnabled) {
+            if (isDummyResponseEnabled) {
                 SQLResponse dummyResponse = new SQLResponse();
                 dummyResponse.setLazyQueryStartTime(System.currentTimeMillis());
                 cacheManager.getCache(QUERY_CACHE).put(sqlRequest.getCacheKey(), dummyResponse);
@@ -536,7 +566,7 @@ public class QueryService extends BasicService {
                 if (!realtimeQuery) {
                     cacheManager.getCache(QUERY_CACHE).put(sqlRequest.getCacheKey(), sqlResponse);
                 }
-            } else if (isDummpyResponseEnabled) {
+            } else if (isDummyResponseEnabled) {
                 cacheManager.getCache(QUERY_CACHE).evict(sqlRequest.getCacheKey());
             }
 
@@ -553,6 +583,10 @@ public class QueryService extends BasicService {
                     && ExceptionUtils.getRootCause(e) instanceof ResourceLimitExceededException) {
                 Cache exceptionCache = cacheManager.getCache(QUERY_CACHE);
                 exceptionCache.put(sqlRequest.getCacheKey(), sqlResponse);
+            } else if (isDummyResponseEnabled) {
+                // evict dummy response to avoid caching too many bad queries
+                Cache exceptionCache = cacheManager.getCache(QUERY_CACHE);
+                exceptionCache.evict(sqlRequest.getCacheKey());
             }
         }
         return sqlResponse;
@@ -660,8 +694,6 @@ public class QueryService extends BasicService {
             parameters.put(OLAPContext.PRM_USER_AUTHEN_INFO, userInfo);
             parameters.put(OLAPContext.PRM_ACCEPT_PARTIAL_RESULT, String.valueOf(sqlRequest.isAcceptPartial()));
             OLAPContext.setParameters(parameters);
-            // force clear the query context before a new query
-            OLAPContext.clearThreadLocalContexts();
 
             // special case for prepare query.
             List<List<String>> results = Lists.newArrayList();
@@ -1022,13 +1054,15 @@ public class QueryService extends BasicService {
 
     private Pair<List<List<String>>, List<SelectedColumnMeta>> pushDownQuery(SQLRequest sqlRequest, String correctedSql,
             Connection conn, SQLException sqlException) throws Exception {
+        ProjectInstance projectInstance = getProjectManager().getProject(sqlRequest.getProject());
         try {
             return PushDownUtil.tryPushDownSelectQuery(sqlRequest.getProject(), correctedSql, conn.getSchema(),
-                    sqlException, BackdoorToggles.getPrepareOnly());
+                    sqlException, BackdoorToggles.getPrepareOnly(), projectInstance != null ? projectInstance.getConfig() : null);
         } catch (Exception e2) {
             logger.error("pushdown engine failed current query too", e2);
             //exception in pushdown, throw it instead of exception in calcite
-            throw e2;
+            throw new Exception(sqlException != null ? ("olap exception : " + sqlException.getMessage()) : ("")
+                    + " pushdown exception : " + e2.getMessage(), e2);
         }
     }
 

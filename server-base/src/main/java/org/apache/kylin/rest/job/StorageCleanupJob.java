@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
-import com.google.common.collect.Lists;
+import org.apache.kylin.shaded.com.google.common.collect.Lists;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
@@ -60,9 +60,9 @@ import org.apache.kylin.storage.hbase.HBaseConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Predicate;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Maps;
+import org.apache.kylin.shaded.com.google.common.base.Predicate;
+import org.apache.kylin.shaded.com.google.common.collect.Iterables;
+import org.apache.kylin.shaded.com.google.common.collect.Maps;
 
 public class StorageCleanupJob extends AbstractApplication {
 
@@ -162,15 +162,33 @@ public class StorageCleanupJob extends AbstractApplication {
 
     // function entrance
     public void cleanup() throws Exception {
-
-        cleanUnusedIntermediateHiveTable();
-        cleanUnusedHBaseTables();
-        cleanUnusedHdfsFiles();
+        boolean error = false;
+        try {
+            cleanUnusedIntermediateHiveTable();
+        } catch (Exception e) {
+            logger.warn("cleanUnusedIntermediateHiveTable() error", e);
+            error = true;
+        }
+        try {
+            cleanUnusedHBaseTables();
+        } catch (Exception e) {
+            logger.warn("cleanUnusedHBaseTables() error", e);
+            error = true;
+        }
+        try {
+            cleanUnusedHdfsFiles();
+        } catch (Exception e) {
+            logger.warn("cleanUnusedHdfsFiles() error", e);
+            error = true;
+        }
+        if (error) {
+            throw new Exception("clean job has exception");
+        }
     }
 
     protected void cleanUnusedHBaseTables() throws IOException {
         if ("hbase".equals(config.getStorageUrl().getScheme()) && !"".equals(config.getMetadataUrl().getScheme())) {
-            final int deleteTimeoutMin = 10; // Unit minute
+            final int deleteTimeoutMin = 2; // Unit minute
             try {
                 // use reflection to isolate NoClassDef errors when HBase is not available
                 Class hbaseCleanUpUtil = Class.forName("org.apache.kylin.rest.job.StorageCleanJobHbaseUtil");
@@ -485,6 +503,9 @@ public class StorageCleanupJob extends AbstractApplication {
 
     private String getSegmentIdFromJobId(String jobId) {
         AbstractExecutable abstractExecutable = executableManager.getJob(jobId);
+        if (abstractExecutable == null) {
+            return null;
+        }
         String segmentId = abstractExecutable.getParam("segmentId");
         return segmentId;
     }

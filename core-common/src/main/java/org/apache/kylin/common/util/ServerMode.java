@@ -23,7 +23,7 @@ import java.util.Locale;
 
 import org.apache.kylin.common.KylinConfig;
 
-import com.google.common.collect.Lists;
+import org.apache.kylin.shaded.com.google.common.collect.Lists;
 
 public class ServerMode {
     public final static String SERVER_MODE_QUERY = "query";
@@ -59,7 +59,7 @@ public class ServerMode {
         return serverModes.toString();
     }
 
-    public static ServerMode SERVER_MODE = getServerMode();
+    public static final ServerMode SERVER_MODE = getServerMode();
 
     private static ServerMode getServerMode() {
         KylinConfig kylinConfig = KylinConfig.getInstanceFromEnv();

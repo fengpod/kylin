@@ -26,6 +26,7 @@ import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
@@ -69,8 +70,8 @@ import org.apache.kylin.metadata.model.TblColRef;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
+import org.apache.kylin.shaded.com.google.common.collect.Lists;
+import org.apache.kylin.shaded.com.google.common.collect.Maps;
 
 /**
  * This should be in cube module. It's here in engine-mr because currently stats
@@ -107,7 +108,7 @@ public class CubeStatsReader {
         Path path = new Path(HadoopUtil.fixWindowsPath("file://" + tmpSeqFile.getAbsolutePath()));
 
         CubeStatsResult cubeStatsResult = new CubeStatsResult(path, kylinConfig.getCubeStatsHLLPrecision());
-        tmpSeqFile.delete();
+        Files.deleteIfExists(tmpSeqFile.toPath());
 
         this.seg = cubeSegment;
         this.cuboidScheduler = cuboidScheduler;
@@ -234,14 +235,20 @@ public class CubeStatsReader {
     }
 
     private static Double harmonicMean(List<Double> data) {
-        if (data == null || data.size() == 0) {
+        if (data == null || data.isEmpty()) {
             return 1.0;
         }
         Double sum = 0.0;
         for (Double item : data) {
             sum += 1.0 / item;
         }
-        return data.size() / sum;
+
+        if (sum == 0.0) {
+            return 1.0;
+        } else {
+            return data.size() / sum;
+        }
+
     }
 
     private static List<Double> getHistoricalRating(CubeSegment cubeSegment,
@@ -310,8 +317,6 @@ public class CubeStatsReader {
         }
 
         logger.info("cube size is {} after optimize", SumHelper.sumDouble(sizeMap.values()));
-
-        return;
     }
 
 
@@ -372,7 +377,7 @@ public class CubeStatsReader {
     private void print(PrintWriter out) {
         Map<Long, Long> cuboidRows = getCuboidRowEstimatesHLL();
         Map<Long, Double> cuboidSizes = getCuboidSizeMap();
-        List<Long> cuboids = new ArrayList<Long>(cuboidRows.keySet());
+        List<Long> cuboids = new ArrayList<>(cuboidRows.keySet());
         Collections.sort(cuboids);
 
         out.println("============================================================================");
@@ -524,7 +529,7 @@ public class CubeStatsReader {
     }
 
     public static void main(String[] args) throws IOException {
-        System.out.println("CubeStatsReader is used to read cube statistic saved in metadata store");
+        logger.info("CubeStatsReader is used to read cube statistic saved in metadata store");
         KylinConfig config = KylinConfig.getInstanceFromEnv();
         CubeInstance cube = CubeManager.getInstance(config).getCube(args[0]);
         List<CubeSegment> segments = cube.getSegments();

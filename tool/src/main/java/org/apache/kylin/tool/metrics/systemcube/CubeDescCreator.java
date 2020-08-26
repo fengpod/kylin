@@ -47,9 +47,9 @@ import org.apache.kylin.metrics.property.QueryCubePropertyEnum;
 import org.apache.kylin.metrics.property.QueryPropertyEnum;
 import org.apache.kylin.metrics.property.QueryRPCPropertyEnum;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import org.apache.kylin.shaded.com.google.common.collect.Lists;
+import org.apache.kylin.shaded.com.google.common.collect.Maps;
+import org.apache.kylin.shaded.com.google.common.collect.Sets;
 import org.apache.kylin.tool.metrics.systemcube.def.MetricsSinkDesc;
 
 public class CubeDescCreator {
@@ -450,7 +450,7 @@ public class CubeDescCreator {
         desc.setHbaseMapping(hBaseMapping);
         desc.setNotifyList(Lists.<String> newArrayList());
         desc.setStatusNeedNotify(Lists.newArrayList(JobStatusEnum.ERROR.toString()));
-        desc.setAutoMergeTimeRanges(new long[] { 86400000L, 604800000L, 2419200000L });
+        desc.setAutoMergeTimeRanges(new long[] { 86400000L, 604800000L, 2419200000L, 7776000000L, 31104000000L });
         desc.setEngineType(IEngineAware.ID_MR_V2);
         desc.setStorageType(storageType);
         desc.setAggregationGroups(Lists.newArrayList(aggGroup));

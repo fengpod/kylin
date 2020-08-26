@@ -28,7 +28,7 @@ import java.util.Map;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import com.google.common.base.Strings;
+import org.apache.kylin.shaded.com.google.common.base.Strings;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.GnuParser;
 import org.apache.commons.cli.Option;
@@ -60,8 +60,8 @@ import org.apache.kylin.job.execution.Output;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
+import org.apache.kylin.shaded.com.google.common.base.Preconditions;
+import org.apache.kylin.shaded.com.google.common.collect.Lists;
 
 /**
  */
@@ -131,6 +131,17 @@ public class MapReduceExecutable extends AbstractExecutable {
             final Map<String, String> extra = mgr.getOutput(getId()).getExtra();
             if (extra.containsKey(ExecutableConstants.MR_JOB_ID)) {
                 job = new Cluster(conf).getJob(JobID.forName(extra.get(ExecutableConstants.MR_JOB_ID)));
+                if (job == null) {
+                    logger.error("getJob by jobId {} failed , please check RM or job history server", extra.get("mr_job_id"));
+                    if (isDiscarded()) {
+                        if (getIsNeedLock()) {
+                            releaseLock(lock);
+                        }
+                        return new ExecuteResult(ExecuteResult.State.DISCARDED, "job failed");
+                    } else {
+                        return ExecuteResult.createFailed(new MapReduceException("job failed"));
+                    }
+                }
                 logger.info("mr_job_id:" + extra.get(ExecutableConstants.MR_JOB_ID) + " resumed");
             } else {
                 final Constructor<? extends AbstractHadoopJob> constructor = ClassUtil
@@ -360,17 +371,17 @@ public class MapReduceExecutable extends AbstractExecutable {
         long lockStartTime = System.currentTimeMillis();
 
         boolean isLockedByTheJob = lock.isLocked(fullLockPath);
-        logger.info("cube job {} zk lock is isLockedByTheJob:{}", getId(), isLockedByTheJob);
-        if (!isLockedByTheJob) {//not lock by the job
+        logger.info("cube job {} zk lock is isLockedByTheJob: {}", getId(), isLockedByTheJob);
+        if (!isLockedByTheJob) { //not lock by the job
             while (isLockedByOther) {
-                isLockedByOther = lock.isLocked(getCubeJobLockParentPathName());//other job global lock
+                isLockedByOther = lock.isLocked(getCubeJobLockParentPathName()); //other job global lock
 
-                if (!isLockedByOther) {//not lock by other job
+                if (!isLockedByOther) { //not lock by other job
                     isLockedByOther = lock.isLocked(ephemeralLockPath);//check the ephemeral current lock
                     logger.info("zookeeper lock path :{}, is locked by other job result is {}", ephemeralLockPath,
                             isLockedByOther);
 
-                    if (!isLockedByOther) {//the ephemeral lock not lock by other job
+                    if (!isLockedByOther) { //the ephemeral lock not lock by other job
                         //try to get ephemeral lock
                         try {
                             logger.debug("{} before start to get lock ephemeralLockPath {}", getId(),
@@ -402,12 +413,12 @@ public class MapReduceExecutable extends AbstractExecutable {
                                 }
                             }
                         }
-                        isLockedByOther = true;//get lock fail,will try again
+                        isLockedByOther = true;//get lock fail, will try again
                     }
                 }
                 // wait 1 min and try again
                 logger.info(
-                        "{}, parent lock path({}) is locked by other job result is {} ,ephemeral lock path :{} is locked by other job result is {},will try after one minute",
+                        "{}, parent lock path({}) is locked by other job result is {} ,ephemeral lock path: {} is locked by other job result is {}, will try after one minute",
                         getId(), getCubeJobLockParentPathName(), isLockedByOther, ephemeralLockPath, isLockedByOther);
                 Thread.sleep(60000);
             }

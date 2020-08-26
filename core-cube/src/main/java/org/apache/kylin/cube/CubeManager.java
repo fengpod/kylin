@@ -84,11 +84,11 @@ import org.apache.kylin.source.SourcePartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import org.apache.kylin.shaded.com.google.common.annotations.VisibleForTesting;
+import org.apache.kylin.shaded.com.google.common.base.Preconditions;
+import org.apache.kylin.shaded.com.google.common.collect.Lists;
+import org.apache.kylin.shaded.com.google.common.collect.Maps;
+import org.apache.kylin.shaded.com.google.common.collect.Sets;
 
 /**
  * @author yangli9
@@ -310,6 +310,16 @@ public class CubeManager implements IRealizationProvider {
             cube = cube.latestCopyForWrite(); // get a latest copy
             CubeUpdate update = new CubeUpdate(cube);
             update.setStatus(newStatus);
+            ProjectManager.getInstance(config).touchProject(cube.getProject());
+            return updateCube(update);
+        }
+    }
+
+    public CubeInstance updateCubeOwner(CubeInstance cube, String owner) throws IOException {
+        try (AutoLock lock = cubeMapLock.lockForWrite()) {
+            cube = cube.latestCopyForWrite(); // get a latest copy
+            CubeUpdate update = new CubeUpdate(cube);
+            update.setOwner(owner);
             ProjectManager.getInstance(config).touchProject(cube.getProject());
             return updateCube(update);
         }

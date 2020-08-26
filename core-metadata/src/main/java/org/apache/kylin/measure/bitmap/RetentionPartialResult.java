@@ -17,8 +17,8 @@
  */
 package org.apache.kylin.measure.bitmap;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
+import org.apache.kylin.shaded.com.google.common.base.Preconditions;
+import org.apache.kylin.shaded.com.google.common.collect.Lists;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.kylin.common.KylinConfig;
 import org.apache.kylin.common.util.StringUtil;
@@ -43,7 +43,7 @@ public class RetentionPartialResult {
 
     public void add(Object key, List keyList, Object value) {
         Preconditions.checkArgument(key != null);
-        Preconditions.checkArgument(keyList != null && keyList.size() >= 0);
+        Preconditions.checkArgument(keyList != null && !keyList.isEmpty());
         if (this.keyList == null) {
             this.keyList = Lists.transform(keyList, i -> i.toString());
             childKeyToParentKey = new HashMap<>(5);
